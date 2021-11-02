@@ -11,7 +11,8 @@ app.use(cors());
 
 //accessData.ProcessInsertGames();
 //accessData.ProcessInsertPrice();
-accessData.ProcessInsertGameDetails();
+//accessData.ProcessInsertGameDetails();
+accessData.ProcessInsertGameReviewCount();
 
 app.listen(port, err => {
     if (err)

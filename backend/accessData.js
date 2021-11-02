@@ -36,7 +36,7 @@ const accessData = {
     ProcessInsertGameDetails: async function () {
         let apps = await this.GetAllAppsFromDB();
         //if there is an error, resume from slice index
-        const initialChunk = 571;
+        const initialChunk = 2270;
         let counter = 0;
         apps = apps.rows.slice(initialChunk);
         for (let app of apps) {
@@ -217,6 +217,75 @@ const accessData = {
         }
     },
     //update app review count
+    ProcessInsertGameReviewCount: async function () {
+        let apps = await this.GetAllGameAppsOnlyFromDB();
+        const initialChunk = 0;
+        let counter = 0;
+        apps = apps.rows.slice(initialChunk);
+        for (let app of apps) {
+            await this.sleep(1500);
+            console.log(`current chunk: ${initialChunk + counter}`);
+            try {
+                let appDetails = await this.GetGameReviewCountFromSteamAPI(app);
+                //if steam returns undefined json
+                if (appDetails?.success == false) {
+                    counter++;
+                    continue;
+                }
+                await this.InsertGameReviewCountIntoDB(app, appDetails);
+            }
+            catch (err) {
+                console.log(`chunk failed from ${initialChunk + counter}`)
+                console.log(err);
+                return;
+            }
+            counter++;
+        }
+    },
+    GetAllGameAppsOnlyFromDB: async function () {
+        const query = `SELECT appid, name FROM game_details WHERE type = 'game' ORDER BY appid`;
+        try {
+            const results = await pool.query(query);
+            return results;
+        }
+        catch (err) {
+            console.log(err.message);
+        }
+    },
+    GetGameReviewCountFromSteamAPI: async function (app) {
+        try {
+            const results = await axios.get(`https://store.steampowered.com/appreviews/${app.appid}?json=1&num_per_page=0&language=all`);
+            return results.data;
+        }
+        catch (err) {
+            throw err;
+        }
+    },
+    InsertGameReviewCountIntoDB: async function (app, appReviewDetails) {
+        let query = 'UPDATE game_details SET\
+        review_score = $1,\
+        review_score_desc = $2,\
+        total_positive = $3,\
+        total_negative = $4,\
+        total_reviews = $5\
+        WHERE appid = $6';
+        
+        let values = [
+            appReviewDetails?.query_summary?.review_score,
+            appReviewDetails?.query_summary?.review_score_desc,
+            appReviewDetails?.query_summary?.total_positive,
+            appReviewDetails?.query_summary?.total_negative,
+            appReviewDetails?.query_summary?.total_reviews,
+            app.appid
+        ];
+        try {
+            const results = await pool.query(query, values);
+            console.log(`Updated ${app.name} review count.`);
+        }
+        catch (err) {
+            throw (err);
+        }
+    },
     sleep: async function (ms) {
         return new Promise((resolve) => {
             setTimeout(resolve, ms);
