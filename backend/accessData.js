@@ -36,19 +36,27 @@ const accessData = {
     ProcessInsertGameDetails: async function () {
         let apps = await this.GetAllAppsFromDB();
         //if there is an error, resume from slice index
-        const initialChunk = 4;
+        const initialChunk = 571;
         let counter = 0;
         apps = apps.rows.slice(initialChunk);
         for (let app of apps) {
-            await this.sleep(2000);
+            //delay for rate limiting
+            await this.sleep(1500);
             console.log(`current chunk: ${initialChunk + counter}`);
             try {
-                const appWithDetails = await this.GetAppDetailsFromSteamAPI(app);
-                await this.InsertAppDetailsInDB(appWithDetails);
-                await this.InsertAppGenresInDB(appWithDetails);
-                await this.InsertAppCategoriesInDB(appWithDetails);
-                await this.InsertAppDevelopersInDB(appWithDetails);
-                await this.InsertAppPublishersInDB(appWithDetails);
+                let appDetails = await this.GetAppDetailsFromSteamAPI(app);
+                //if steam returns undefined json
+                if (appDetails?.success == false) {
+                    counter++;
+                    continue;
+                }
+                appDetails = this.SanitizeJSON(appDetails);
+
+                await this.InsertAppDetailsInDB(appDetails);
+                await this.InsertAppGenresInDB(appDetails);
+                await this.InsertAppCategoriesInDB(appDetails);
+                await this.InsertAppDevelopersInDB(appDetails);
+                await this.InsertAppPublishersInDB(appDetails);
             }
             catch (err) {
                 console.log(`chunk failed from ${initialChunk + counter}`)
@@ -78,9 +86,6 @@ const accessData = {
         }
     },
     InsertAppDetailsInDB: async function (appDetails) {
-        if (appDetails?.data?.steam_appid == null)
-            return;
-
         let query = 'INSERT INTO game_details\
         (appid,\
         name,\
@@ -216,6 +221,16 @@ const accessData = {
         return new Promise((resolve) => {
             setTimeout(resolve, ms);
         });
+    },
+    IsValidDate: function (d) {
+        return d instanceof Date && !isNaN(d);
+    },
+    SanitizeJSON: function (appDetails) {
+        //release date can be "coming soon"
+        if (appDetails?.data?.release_date?.date != null && !this.IsValidDate(appDetails.data.release_date.date)) {
+            appDetails.data.release_date.date = null;
+        }
+        return appDetails;
     }
 }
 
