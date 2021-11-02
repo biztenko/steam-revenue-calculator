@@ -87,7 +87,7 @@ const accessData = {
         for (let app of apps) {
             const query = 'UPDATE game SET initial_price = $1 WHERE appid = $2';
             const values = [
-                appsPrice[app.appid]?.data?.price_overview?.initial || 0,
+                appsPrice[app.appid]?.data?.price_overview?.initial,
                 app.appid
             ];
             try {
@@ -99,6 +99,124 @@ const accessData = {
             }
         }
     },
+    //update complete app details
+    ProcessUpdateGameDetails: async function () {
+        let apps = await this.GetAllAppsFromDB();
+        //if there is an error, resume from slice index
+        const initialChunk = 0;
+        let counter = 0;
+        apps = apps.rows.slice(initialChunk);
+        for (let app of apps) {
+            await this.sleep(2000);
+            console.log(`current chunk: ${initialChunk + counter}`);
+            try {
+                const appWithDetails = await this.GetAppDetailsFromSteamAPI(app);
+                await this.UpdateAppDetailsInDB(appWithDetails);
+            }
+            catch (err) {
+                console.log(`chunk failed from ${initialChunk + counter}`)
+                console.log(err);
+                return;
+            }
+            counter++;
+        }
+    },
+    GetAppDetailsFromSteamAPI: async function (app) {
+        try {
+            const results = await axios.get(`https://store.steampowered.com/api/appdetails?appids=${app.appid}&cc=us`);
+            return results.data[app.appid];
+        }
+        catch (err) {
+            throw err;
+        }
+    },
+    UpdateAppDetailsInDB: async function (appDetails) {
+        let query = 'UPDATE game SET\
+        initial_price = $1,\
+        type = $2,\
+        required_age = $3,\
+        is_free = $4,\
+        detailed_description = $5,\
+        about_the_game = $6,\
+        short_description = $7,\
+        supported_languages = $8,\
+        header_image = $9,\
+        website = $10,\
+        final_price = $11,\
+        discount_percent = $12,\
+        metacritic_score = $13,\
+        recommendations = $14,\
+        release_date = $15,\
+        platforms_windows = $16,\
+        platforms_mac = $17,\
+        platforms_linux = $18\
+        WHERE appid = $19';
+
+        let values = [
+            appDetails?.data?.price_overview?.initial,
+            appDetails?.data?.type,
+            appDetails?.data?.required_age,
+            appDetails?.data?.is_free,
+            appDetails?.data?.detailed_description,
+            appDetails?.data?.about_the_game,
+            appDetails?.data?.short_description,
+            appDetails?.data?.supported_languages,
+            appDetails?.data?.header_image,
+            appDetails?.data?.website,
+            appDetails?.data?.price_overview?.final,
+            appDetails?.data?.price_overview?.discount_percent,
+            appDetails?.data?.metacritic?.score,
+            appDetails?.data?.recommendations?.total,
+            appDetails?.data?.release_date?.date,
+            appDetails?.data?.platforms?.windows,
+            appDetails?.data?.platforms?.mac,
+            appDetails?.data?.platforms?.linux,
+            appDetails?.data?.steam_appid
+        ];
+        try {
+            const results = await pool.query(query, values);
+            console.log(`Inserted ${appDetails?.data?.name} into database.`);
+        }
+        catch (err) {
+            console.log(err.message);
+        }
+
+        query = 'INSERT INTO game_categories (appid, id, description)\
+        VALUES ($1, $2, $3)\
+        ON CONFLICT (appid) DO UPDATE\
+        SET id = $2, description = $3'
+
+        values = [
+            appDetails?.data?.steam_appid,
+            appDetails?.data?.genres?.id,
+            appDetails?.data?.genres?.description
+        ]
+        try {
+            const results = await pool.query(query, values);
+            console.log(`Inserted ${appDetails?.data?.name} (categories) into database.`);
+        }
+        catch (err) {
+            console.log(err.message);
+        }
+        query = 'INSERT INTO game_genres (appid, id, description)\
+        VALUES ($1, $2, $3)\
+        ON CONFLICT (appid) DO UPDATE\
+        SET id = $2, description = $3'
+
+        values = [
+            appDetails?.data?.steam_appid,
+            appDetails?.data?.categories?.id,
+            appDetails?.data?.categories?.description
+        ]
+        try {
+            const results = await pool.query(query, values);
+            console.log(`Inserted ${appDetails?.data?.name} (genres) into database.`);
+        }
+        catch (err) {
+            console.log(err.message);
+        }
+    },
+    //update app review count
     sleep: async function (ms) {
         return new Promise((resolve) => {
             setTimeout(resolve, ms);

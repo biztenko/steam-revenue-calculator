@@ -10,7 +10,8 @@ app.use(cors());
 
 
 //accessData.ProcessInsertGames();
-accessData.ProcessUpdatePrice();
+//accessData.ProcessUpdatePrice();
+accessData.ProcessUpdateGameDetails();
 
 app.listen(port, err => {
     if (err)
