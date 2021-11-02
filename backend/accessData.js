@@ -78,7 +78,7 @@ const accessData = {
         }
     },
     InsertAppDetailsInDB: async function (appDetails) {
-        if (appDetails?.data?.appid == null)
+        if (appDetails?.data?.steam_appid == null)
             return;
 
         let query = 'INSERT INTO game_details\
