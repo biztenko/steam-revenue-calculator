@@ -33,10 +33,9 @@ const accessData = {
         }
     },
     //insert complete app details
-    ProcessInsertGameDetails: async function () {
+    ProcessInsertGameDetails: async function (initialChunk) {
         let apps = await this.GetAllAppsFromDB();
         //if there is an error, resume from slice index
-        const initialChunk = 2270;
         let counter = 0;
         apps = apps.rows.slice(initialChunk);
         for (let app of apps) {
@@ -52,15 +51,16 @@ const accessData = {
                 }
                 appDetails = this.SanitizeJSON(appDetails);
 
-                await this.InsertAppDetailsInDB(appDetails);
-                await this.InsertAppGenresInDB(appDetails);
-                await this.InsertAppCategoriesInDB(appDetails);
-                await this.InsertAppDevelopersInDB(appDetails);
-                await this.InsertAppPublishersInDB(appDetails);
+                await this.InsertAppDetailsInDB(app, appDetails);
+                await this.InsertAppGenresInDB(app, appDetails);
+                await this.InsertAppCategoriesInDB(app, appDetails);
+                await this.InsertAppDevelopersInDB(app, appDetails);
+                await this.InsertAppPublishersInDB(app, appDetails);
             }
             catch (err) {
                 console.log(`chunk failed from ${initialChunk + counter}`)
                 console.log(err);
+                this.ProcessInsertGameDetails(initialChunk + counter);
                 return;
             }
             counter++;
@@ -85,7 +85,7 @@ const accessData = {
             throw err;
         }
     },
-    InsertAppDetailsInDB: async function (appDetails) {
+    InsertAppDetailsInDB: async function (app, appDetails) {
         let query = 'INSERT INTO game_details\
         (appid,\
         name,\
@@ -111,7 +111,7 @@ const accessData = {
         ON CONFLICT DO NOTHING';
 
         let values = [
-            appDetails?.data?.steam_appid,
+            app.appid,
             appDetails?.data?.name,
             appDetails?.data?.price_overview?.initial,
             appDetails?.data?.type,
@@ -140,13 +140,13 @@ const accessData = {
             throw (err);
         }
     },
-    InsertAppGenresInDB: async function (appDetails) {
+    InsertAppGenresInDB: async function (app, appDetails) {
         if (appDetails?.data?.genres == null)
             return;
         for (let genre of appDetails.data.genres) {
             query = 'INSERT INTO game_genres (appid, id, description) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING';
             values = [
-                appDetails.data.steam_appid,
+                app.appid,
                 genre.id,
                 genre.description
             ]
@@ -159,14 +159,14 @@ const accessData = {
             }
         }
     },
-    InsertAppCategoriesInDB: async function (appDetails) {
+    InsertAppCategoriesInDB: async function (app, appDetails) {
         if (appDetails?.data?.categories == null)
             return;
         for (let category of appDetails.data.categories) {
             query = 'INSERT INTO game_categories (appid, id, description) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING';
 
             values = [
-                appDetails.data.steam_appid,
+                app.appid,
                 category.id,
                 category.description
             ]
@@ -180,13 +180,13 @@ const accessData = {
         }
 
     },
-    InsertAppPublishersInDB: async function (appDetails) {
+    InsertAppPublishersInDB: async function (app, appDetails) {
         if (appDetails?.data?.publishers == null)
             return;
         for (let publisher of appDetails.data.publishers) {
             query = 'INSERT INTO game_publishers (appid, name) VALUES ($1, $2) ON CONFLICT DO NOTHING';
             values = [
-                appDetails.data.steam_appid,
+                app.appid,
                 publisher
             ]
             try {
@@ -198,13 +198,13 @@ const accessData = {
             }
         }
     },
-    InsertAppDevelopersInDB: async function (appDetails) {
+    InsertAppDevelopersInDB: async function (app, appDetails) {
         if (appDetails?.data?.developers == null)
             return;
         for (let developer of appDetails.data.developers) {
             query = 'INSERT INTO game_developers (appid, name) VALUES ($1, $2) ON CONFLICT DO NOTHING';
             values = [
-                appDetails.data.steam_appid,
+                app.appid,
                 developer
             ]
             try {
@@ -217,13 +217,12 @@ const accessData = {
         }
     },
     //update app review count
-    ProcessInsertGameReviewCount: async function () {
+    ProcessInsertGameReviewCount: async function (initialChunk) {
         let apps = await this.GetAllGameAppsOnlyFromDB();
-        const initialChunk = 0;
         let counter = 0;
         apps = apps.rows.slice(initialChunk);
         for (let app of apps) {
-            await this.sleep(1500);
+            await this.sleep(1200);
             console.log(`current chunk: ${initialChunk + counter}`);
             try {
                 let appDetails = await this.GetGameReviewCountFromSteamAPI(app);
@@ -237,6 +236,7 @@ const accessData = {
             catch (err) {
                 console.log(`chunk failed from ${initialChunk + counter}`)
                 console.log(err);
+                this.ProcessInsertGameReviewCount(initialChunk + counter);
                 return;
             }
             counter++;
@@ -269,7 +269,7 @@ const accessData = {
         total_negative = $4,\
         total_reviews = $5\
         WHERE appid = $6';
-        
+
         let values = [
             appReviewDetails?.query_summary?.review_score,
             appReviewDetails?.query_summary?.review_score_desc,
